@@ -4,55 +4,74 @@ from groq import Groq
 import io, os, re
 from docx import Document
 import PyPDF2
-import plotly.express as px # Adicionado para garantir os gráficos
+import plotly.express as px
 
-# --- CONFIGURAÇÃO ---
-# No Streamlit Cloud, adicione a chave em Settings -> Secrets
-GROQ_API_KEY = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY)
+# --- CONFIGURAÇÃO DE ACESSO ---
+if 'autenticado_biz' not in st.session_state:
+    st.session_state['autenticado_biz'] = False
 
-# --- DIRETÓRIOS BASE (Caminhos Relativos para Nuvem) ---
-RAIZ_DOCS = "documentos_licitacao"
-if not os.path.exists(RAIZ_DOCS):
-    os.makedirs(RAIZ_DOCS)
+def main():
+    # 1. TELA DE ACESSO (O "LOGIN" POR CONSTRUTORA)
+    if not st.session_state['autenticado_biz']:
+        st.set_page_config(page_title="Acesso SSI LicitFlow", layout="centered")
+        st.header("🏗️ SSI LicitFlow - Portal da Construtora")
+        chave = st.text_input("Digite sua Chave de Acesso (CNPJ ou Código):", type="password")
+        if st.button("Entrar no Sistema"):
+            if chave.strip() != "":
+                st.session_state['id_empresa'] = chave.upper().strip()
+                st.session_state['autenticado_biz'] = True
+                st.rerun()
+        return
 
-# --- FUNÇÕES TÉCNICAS ---
-def extrair_texto_pdf(arquivo):
-    if arquivo is None: return ""
-    try:
-        pdf_reader = PyPDF2.PdfReader(arquivo)
-        texto = "".join([p.extract_text() for p in pdf_reader.pages[:40] if p.extract_text()])
-        return texto
-    except: return "Erro na leitura."
+    # 2. CONFIGURAÇÃO DE PASTA POR EMPRESA
+    ID_EMPRESA = st.session_state['id_empresa']
+    RAIZ_EMPRESAS = "Gestao_Construtoras"
+    PATH_EMPRESA = os.path.join(RAIZ_EMPRESAS, ID_EMPRESA)
+    if not os.path.exists(PATH_EMPRESA):
+        os.makedirs(PATH_EMPRESA)
 
-def aplicar_cabecalho_ssi():
-    col_logo, col_texto = st.columns([1, 4])
-    with col_logo:
-        # Recomendo subir a imagem logo_ssi.png para a raiz do seu GitHub
-        if os.path.exists("logo_ssi.png"):
-            st.image("logo_ssi.png", width=120)
+    st.set_page_config(page_title=f"SSI LicitFlow - {ID_EMPRESA}", layout="wide")
+
+    # 3. SIDEBAR PERSONALIZÁVEL
+    with st.sidebar:
+        st.header("🎨 Identidade Visual")
+        nome_empresa = st.text_input("Razão Social:", value=f"CONSTRUTORA {ID_EMPRESA}")
+        logo_upload = st.file_uploader("Logo da Empresa (PNG/JPG):", type=["png", "jpg"])
+        
+        st.divider()
+        if logo_upload:
+            st.image(logo_upload, width=150)
         else:
-            st.title("🏗️")
-    with col_texto:
-        st.subheader("SSI ENGENHARIA & CONSULTORIA")
-        obra_nome = st.session_state.get('nome_obra_input', 'Gestão de Obras e Licitações')
-        st.caption(f"LicitFlow CE | Unidade: {obra_nome}")
-    st.divider()
+            # Fallback para o seu logo original se estiver na pasta
+            if os.path.exists("logo_ssi.png"):
+                st.image("logo_ssi.png", width=150)
+            else:
+                st.title("🏗️")
+        
+        st.subheader(nome_empresa)
+        st.caption(f"ID de Acesso: {ID_EMPRESA}")
+        
+        if st.button("🚪 Sair"):
+            st.session_state['autenticado_biz'] = False
+            st.rerun()
+        
+        st.divider()
+        menu = st.radio("Módulos:", ["1. Fase Preparatória", "2. Fase Comercial", "3. Gestão Administrativa", "4. Inteligência de Preços", "5. Execução/Medição", "6. Diario de Obra"])
 
-# --- INTERFACE ---
-st.set_page_config(page_title="SSI LicitFlow v30.0", layout="wide")
+    # 4. APLICAR CABEÇALHO DINÂMICO NOS DOCUMENTOS
+    def aplicar_cabecalho_dinamico():
+        c1, c2 = st.columns([1, 4])
+        with c1:
+            if logo_upload: st.image(logo_upload, width=100)
+            else: st.title("🏗️")
+        with c2:
+            st.subheader(nome_empresa)
+            obra_atual = st.session_state.get('nome_obra_input', 'Nova Obra')
+            st.caption(f"Sistema de Apoio a Licitações e Obras | {obra_atual}")
+        st.divider()
 
-if 'memoria' not in st.session_state:
-    st.session_state.memoria = {k: "" for k in ["Edital", "TR", "Planilha", "Parecer", "Plano", "Memorial", "Proposta", "Checklist_Auto"]}
-
-with st.sidebar:
-    if os.path.exists("logo_ssi.png"):
-        st.image("logo_ssi.png", width=150)
-    menu = st.radio("Módulos:", ["1. Fase Preparatória", "2. Fase Comercial", "3. Gestão Administrativa", "4. Inteligência de Preços", "5. Execução/Medição", "6. Diario de Obra"])
-    if st.button("🗑️ Limpar Tudo"):
-        st.session_state.memoria = {k: "" for k in st.session_state.memoria}
-        if 'df_crono' in st.session_state: del st.session_state.df_crono
-        st.rerun()
+    # --- AQUI SEGUE O RESTANTE DO SEU CÓDIGO (Fase Preparatória, etc.) ---
+    # Substitua as chamadas de aplicar_cabecalho_ssi() por aplicar_cabecalho_dinamico()
 
 # --- CONTEÚDO DOS MÓDULOS ---
 
@@ -89,3 +108,4 @@ if menu == "1. Fase Preparatória":
 
 # --- (Aqui você continua com o resto do seu código original) ---
 # Apenas certifique-se de que onde houver caminhos de arquivos, use a variável 'pasta_obra'
+
