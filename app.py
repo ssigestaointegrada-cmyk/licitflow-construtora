@@ -6,106 +6,130 @@ from docx import Document
 import PyPDF2
 import plotly.express as px
 
-# --- CONFIGURAÇÃO DE ACESSO ---
+# --- CONFIGURAÇÃO DE ACESSO E RAIZ ---
+RAIZ_GERAL = "Gestao_Construtoras"
+if not os.path.exists(RAIZ_GERAL):
+    os.makedirs(RAIZ_GERAL)
+
+# --- INICIALIZAÇÃO DA SESSÃO ---
 if 'autenticado_biz' not in st.session_state:
     st.session_state['autenticado_biz'] = False
+if 'memoria' not in st.session_state:
+    st.session_state.memoria = {k: "" for k in ["Edital", "TR", "Planilha", "Parecer", "Plano", "Memorial", "Proposta", "Checklist_Auto"]}
+
+# --- CONFIGURAÇÃO IA ---
+GROQ_API_KEY = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+# --- FUNÇÕES TÉCNICAS (AJUSTADAS) ---
+def extrair_texto_pdf(arquivo):
+    if arquivo is None: return ""
+    try:
+        pdf_reader = PyPDF2.PdfReader(arquivo)
+        return "".join([p.extract_text() for p in pdf_reader.pages[:40] if p.extract_text()])
+    except: return "Erro na leitura."
 
 def main():
-    # 1. TELA DE ACESSO (O "LOGIN" POR CONSTRUTORA)
+    st.set_page_config(page_title="SSI LicitFlow v30.0", layout="wide")
+
+    # 1. TELA DE LOGIN (CHAVE DE ACESSO)
     if not st.session_state['autenticado_biz']:
-        st.set_page_config(page_title="Acesso SSI LicitFlow", layout="centered")
-        st.header("🏗️ SSI LicitFlow - Portal da Construtora")
-        chave = st.text_input("Digite sua Chave de Acesso (CNPJ ou Código):", type="password")
-        if st.button("Entrar no Sistema"):
-            if chave.strip() != "":
+        st.header("🏗️ SSI LicitFlow - Acesso Restrito")
+        chave = st.text_input("Digite sua Chave de Construtora:", type="password")
+        if st.button("Acessar Painel"):
+            if chave.strip():
                 st.session_state['id_empresa'] = chave.upper().strip()
                 st.session_state['autenticado_biz'] = True
                 st.rerun()
         return
 
-    # 2. CONFIGURAÇÃO DE PASTA POR EMPRESA
-    ID_EMPRESA = st.session_state['id_empresa']
-    RAIZ_EMPRESAS = "Gestao_Construtoras"
-    PATH_EMPRESA = os.path.join(RAIZ_EMPRESAS, ID_EMPRESA)
-    if not os.path.exists(PATH_EMPRESA):
-        os.makedirs(PATH_EMPRESA)
+    # 2. DEFINIÇÃO DE CAMINHOS ISOLADOS
+    ID_EMP = st.session_state['id_empresa']
+    PATH_EMPRESA = os.path.join(RAIZ_GERAL, ID_EMP)
+    os.makedirs(PATH_EMPRESA, exist_ok=True)
 
-    st.set_page_config(page_title=f"SSI LicitFlow - {ID_EMPRESA}", layout="wide")
-
-    # 3. SIDEBAR PERSONALIZÁVEL
+    # 3. SIDEBAR E PERSONALIZAÇÃO
     with st.sidebar:
-        st.header("🎨 Identidade Visual")
-        nome_empresa = st.text_input("Razão Social:", value=f"CONSTRUTORA {ID_EMPRESA}")
-        logo_upload = st.file_uploader("Logo da Empresa (PNG/JPG):", type=["png", "jpg"])
+        st.header("🎨 Identidade")
+        nome_empresa = st.text_input("Razão Social:", value=f"CONSTRUTORA {ID_EMP}")
+        logo_upload = st.file_uploader("Trocar Logo (PNG/JPG):", type=["png", "jpg"])
         
         st.divider()
-        if logo_upload:
-            st.image(logo_upload, width=150)
-        else:
-            # Fallback para o seu logo original se estiver na pasta
-            if os.path.exists("logo_ssi.png"):
-                st.image("logo_ssi.png", width=150)
-            else:
-                st.title("🏗️")
+        if logo_upload: st.image(logo_upload, width=150)
+        else: st.title("🏗️")
         
         st.subheader(nome_empresa)
-        st.caption(f"ID de Acesso: {ID_EMPRESA}")
+        menu = st.radio("Módulos:", ["1. Fase Preparatória", "2. Fase Comercial", "3. Gestão Administrativa", "4. Inteligência de Preços", "5. Execução/Medição", "6. Diario de Obra"])
         
         if st.button("🚪 Sair"):
             st.session_state['autenticado_biz'] = False
             st.rerun()
-        
-        st.divider()
-        menu = st.radio("Módulos:", ["1. Fase Preparatória", "2. Fase Comercial", "3. Gestão Administrativa", "4. Inteligência de Preços", "5. Execução/Medição", "6. Diario de Obra"])
 
-    # 4. APLICAR CABEÇALHO DINÂMICO NOS DOCUMENTOS
-    def aplicar_cabecalho_dinamico():
+    def aplicar_cabecalho():
         c1, c2 = st.columns([1, 4])
         with c1:
             if logo_upload: st.image(logo_upload, width=100)
             else: st.title("🏗️")
         with c2:
             st.subheader(nome_empresa)
-            obra_atual = st.session_state.get('nome_obra_input', 'Nova Obra')
-            st.caption(f"Sistema de Apoio a Licitações e Obras | {obra_atual}")
+            st.caption(f"LicitFlow CE | {st.session_state.get('nome_obra_input', 'Nova Obra')}")
         st.divider()
 
-    # --- AQUI SEGUE O RESTANTE DO SEU CÓDIGO (Fase Preparatória, etc.) ---
-    # Substitua as chamadas de aplicar_cabecalho_ssi() por aplicar_cabecalho_dinamico()
+    # --- MÓDULO 1: FASE PREPARATÓRIA ---
+    if menu == "1. Fase Preparatória":
+        aplicar_cabecalho()
+        st.title("🔍 Auditoria e Repositório")
+        
+        col1, col2 = st.columns(2)
+        nome_obra = col1.text_input("Nome da Obra", key="nome_obra_input")
+        num_lic = col2.text_input("Nº da Licitação", key="num_lic_input")
 
-# --- CONTEÚDO DOS MÓDULOS ---
-
-if menu == "1. Fase Preparatória":
-    aplicar_cabecalho_ssi()
-    st.title("🔍 Fase Preparatória: Auditoria e Repositório")
-    
-    col_id1, col_id2 = st.columns(2)
-    with col_id1:
-        nome_obra = st.text_input("Nome da Obra / Objeto", value=st.session_state.get('nome_obra_input', ""), key="nome_obra_input")
-    with col_id2:
-        num_licitacao = st.text_input("Nº da Licitação", value=st.session_state.get('num_lic_input', ""), key="num_lic_input")
-
-    # Definição de Pasta por Obra
-    if nome_obra and num_licitacao:
-        pasta_slug = f"{nome_obra.replace(' ', '_')}_{num_licitacao.replace('/', '-')}"
-        pasta_obra = os.path.join(RAIZ_DOCS, pasta_slug)
-        if not os.path.exists(pasta_obra): os.makedirs(pasta_obra)
-        st.session_state['pasta_da_obra'] = pasta_obra # Salva para os outros módulos
-    else:
-        pasta_obra = None
-
-    st.divider()
-    
-    # Uploads
-    st.subheader("📤 Upload de Documentos Obrigatórios")
-    u_edital = st.file_uploader("Editais / TRs (PDF)", type="pdf", accept_multiple_files=True)
-    if st.button("💾 Arquivar Documentos"):
-        if pasta_obra and u_edital:
-            for arq in u_edital:
-                with open(os.path.join(pasta_obra, arq.name), "wb") as f:
+        if nome_obra and num_lic:
+            slug = f"{nome_obra.replace(' ', '_')}_{num_lic.replace('/', '-')}"
+            pasta_obra = os.path.join(PATH_EMPRESA, slug)
+            os.makedirs(pasta_obra, exist_ok=True)
+            st.session_state['pasta_ativa'] = pasta_obra
+        
+        st.subheader("📤 Arquivamento de Documentos")
+        ups = st.file_uploader("Arraste Editais, TRs e Planilhas (PDF/Excel)", accept_multiple_files=True)
+        
+        if st.button("💾 Salvar na Nuvem") and 'pasta_ativa' in st.session_state:
+            for arq in ups:
+                with open(os.path.join(st.session_state['pasta_ativa'], arq.name), "wb") as f:
                     f.write(arq.getbuffer())
-            st.success(f"Arquivado em {pasta_obra}")
+            st.success("Documentos protegidos com sucesso!")
 
-# --- (Aqui você continua com o resto do seu código original) ---
-# Apenas certifique-se de que onde houver caminhos de arquivos, use a variável 'pasta_obra'
+    # --- MÓDULO 5: EXECUÇÃO/MEDIÇÃO (AJUSTADO PARA SALVAR NA PASTA CERTA) ---
+    elif menu == "5. Execução/Medição":
+        aplicar_cabecalho()
+        st.title("🏗️ Medição de Obra")
+        
+        if 'pasta_ativa' not in st.session_state:
+            st.warning("⚠️ Selecione uma obra no Módulo 1 primeiro.")
+        else:
+            p_obra = st.session_state['pasta_ativa']
+            p_med = os.path.join(p_obra, "Medicoes")
+            os.makedirs(p_med, exist_ok=True)
 
+            # Exemplo simplificado de tabela de medição
+            df_med = st.data_editor(pd.DataFrame({'Item': ['Serviço A'], 'Total (R$)': [1000.0], 'Exec (%)': [0.0]}))
+            
+            if st.button("💾 Finalizar Medição"):
+                data_str = pd.Timestamp.now().strftime("%Y-%m-%d_%H-%M")
+                nome_arq = f"Medicao_{data_str}.xlsx"
+                caminho_final = os.path.join(p_med, nome_arq)
+                
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_med.to_excel(writer, index=False)
+                
+                with open(caminho_final, "wb") as f:
+                    f.write(output.getvalue())
+                
+                st.success(f"Medição arquivada em: {caminho_final}")
+                st.download_button("📥 Baixar Agora", output.getvalue(), nome_arq)
+
+    # --- (Outros módulos seguem a mesma lógica de usar st.session_state['pasta_ativa']) ---
+
+if __name__ == "__main__":
+    main()
