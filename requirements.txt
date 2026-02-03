@@ -1,6 +1,7 @@
 streamlit
 pandas
+groq
 python-docx
-openpyxl
-qrcode
-pillow
+PyPDF2
+xlsxwriter
+plotly
